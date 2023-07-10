@@ -2,8 +2,37 @@ const int IR_SENSOR_PIN1 = 6;
 const int IR_SENSOR_PIN2 = 7;
 const int BUTTON_PIN = 12;
 
-unsigned long race_start_ms;
-unsigned long race_end_ms;
+class Race {
+  public:
+    unsigned long start_ms;
+    unsigned long end_ms;
+
+    Race() {
+      start_ms = 0;
+      end_ms = 0;
+    }
+
+    void start() {
+      start_ms = millis();
+    }
+
+    void end() {
+      end_ms = millis();
+    }
+
+    bool in_progress() {
+      return start_ms != 0 && end_ms == 0;
+    }
+
+    unsigned long duration() {
+      return end_ms - start_ms;
+    }
+
+    String duration_formatted() {
+      unsigned long d = duration();
+      return (d / 1000) + (String) "s" + (d % 1000) + (String) "ms";
+    }
+};
 
 class State {
   public:
@@ -28,6 +57,11 @@ class State {
 
 State previous_state;
 State current_state;
+Race race;
+
+void log(String msg) {
+  Serial.println(millis() + (String) ": " + msg);
+}
 
 void setup()  {
   pinMode(IR_SENSOR_PIN1, INPUT);
@@ -43,44 +77,29 @@ void setup()  {
 void loop() {
   current_state = State();
 
-  if (current_state.button_pressed(previous_state)) {
-    if (race_in_progress()) {
-      reset_race();
-    } else {
-      start_race();
+  if (race.in_progress()) {
+    if (current_state.button_pressed(previous_state)) {
+      // Race in progress, button pressed
+      race = Race();
+      return;
+    }
+
+    if (current_state.beam_broken()) {
+      // Race in progress, beam broken
+      race.end();
+      log("Race Over: " + race.duration_formatted());
+      return;
+    }
+
+    log("Race in progress");
+  } else {
+    if (current_state.button_pressed(previous_state)) {
+      // Button pressed, race not in progress
+      race.start();
+      log("Race started");
+      return;
     }
   }
 
-  if (current_state.beam_broken() && race_in_progress()) {
-    race_end_ms = millis();
-    unsigned long duration_ms = race_end_ms - race_start_ms;
-    String duration_formatted = (duration_ms / 1000) + (String) "s" + (duration_ms % 1000) + (String) "ms";
-    log("Race Over: " + duration_formatted);
-  }
-
-  if (race_in_progress()) {
-    log("Race in progress");
-  }
-
   previous_state = current_state;
-}
-
-void log(String msg) {
-  Serial.println(millis() + (String) ": " + msg);
-}
-
-bool reset_race() {
-  log("Race reset");
-  race_start_ms = 0;
-  race_end_ms = 0;
-}
-
-bool start_race() {
-  log("Race started");
-  race_start_ms = millis();
-  race_end_ms = 0;
-}
-
-bool race_in_progress() {
-  return race_start_ms != 0 && race_end_ms == 0;
 }
