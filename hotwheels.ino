@@ -31,10 +31,6 @@ class Race {
       return start_ms != 0 && end_ms == 0;
     }
 
-    int duration_ms() {
-      return end_ms - start_ms;
-    }
-
     int elapsed_ms() {
       return millis() - start_ms;
     }
