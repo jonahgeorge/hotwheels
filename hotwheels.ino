@@ -1,3 +1,10 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+
+#include "Adafruit_LEDBackpack.h"
+
+Adafruit_7segment matrix = Adafruit_7segment();
+
 const int IR_SENSOR_PIN1 = 6;
 const int IR_SENSOR_PIN2 = 7;
 const int BUTTON_PIN = 12;
@@ -24,13 +31,19 @@ class Race {
       return start_ms != 0 && end_ms == 0;
     }
 
-    unsigned long duration() {
+    int duration_ms() {
       return end_ms - start_ms;
     }
 
-    String duration_formatted() {
-      unsigned long d = duration();
-      return (d / 1000) + (String) "s" + (d % 1000) + (String) "ms";
+    int elapsed_ms() {
+      return millis() - start_ms;
+    }
+};
+
+class Log {
+  public:
+    static void info(String msg) {
+      Serial.println(millis() + (String) ": " + msg);
     }
 };
 
@@ -55,14 +68,6 @@ class State {
     }
 };
 
-State previous_state;
-State current_state;
-Race race;
-
-void log(String msg) {
-  Serial.println(millis() + (String) ": " + msg);
-}
-
 void setup()  {
   pinMode(IR_SENSOR_PIN1, INPUT);
   pinMode(IR_SENSOR_PIN2, INPUT);
@@ -70,36 +75,49 @@ void setup()  {
 
   digitalWrite(IR_SENSOR_PIN1, HIGH); 
   digitalWrite(IR_SENSOR_PIN2, HIGH); 
+
+  matrix.begin(0x70);
   
   Serial.begin(9600);
 }
 
-void loop() {
-  current_state = State();
+void write_display(int elapsed_ms) {
+  matrix.println(String(elapsed_ms / 1000.0, 2));
+  matrix.writeDisplay();
+}
 
-  if (race.in_progress()) {
-    if (current_state.button_pressed(previous_state)) {
-      // Race in progress, button pressed
-      race = Race();
-      return;
-    }
+State previous_state;
+State current_state;
+Race race;
 
-    if (current_state.beam_broken()) {
-      // Race in progress, beam broken
-      race.end();
-      log("Race Over: " + race.duration_formatted());
-      return;
-    }
-
-    log("Race in progress");
-  } else {
-    if (current_state.button_pressed(previous_state)) {
-      // Button pressed, race not in progress
-      race.start();
-      log("Race started");
-      return;
-    }
+void hotloop() {
+  if (!race.in_progress() && current_state.button_pressed(previous_state)) {
+    Log::info("Race started");
+    race = Race();
+    race.start();
+    return;
   }
 
+  if (race.in_progress() && current_state.button_pressed(previous_state)) {
+    Log::info("Race reset");
+    race = Race();
+    return;
+  }
+
+  if (race.in_progress() && current_state.beam_broken()) {
+    Log::info("Race ended");
+    race.end();
+    return;
+  }
+
+  if (race.in_progress()) {
+    write_display(race.elapsed_ms());
+    return;
+  }
+}
+
+void loop() {
+  current_state = State();
+  hotloop();
   previous_state = current_state;
 }
