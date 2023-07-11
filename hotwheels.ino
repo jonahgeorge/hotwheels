@@ -10,58 +10,60 @@ const int IR_SENSOR_PIN2 = 7;
 const int BUTTON_PIN = 12;
 
 class Race {
-  public:
-    unsigned long start_ms;
-    unsigned long end_ms;
+  unsigned long start_ms;
+  unsigned long end_ms;
 
-    Race() {
-      start_ms = 0;
-      end_ms = 0;
-    }
+public:
 
-    void start() {
-      start_ms = millis();
-    }
+  Race() {
+    start_ms = 0;
+    end_ms = 0;
+  }
 
-    void end() {
-      end_ms = millis();
-    }
+  void start() {
+    start_ms = millis();
+  }
 
-    bool in_progress() {
-      return start_ms != 0 && end_ms == 0;
-    }
+  void end() {
+    end_ms = millis();
+  }
 
-    int elapsed_ms() {
-      return millis() - start_ms;
-    }
+  bool in_progress() {
+    return start_ms != 0 && end_ms == 0;
+  }
+
+  int elapsed_ms() {
+    return millis() - start_ms;
+  }
 };
 
 class Log {
-  public:
-    static void info(String msg) {
-      Serial.println(millis() + (String) ": " + msg);
-    }
+public:
+  static void info(String msg) {
+    Serial.println(millis() + (String) ": " + msg);
+  }
 };
 
 class State {
-  public:
-    int button_state;
-    int ir_sensor_state1;
-    int ir_sensor_state2;
+  int button_state;
+  int ir_sensor_state1;
+  int ir_sensor_state2;
 
-    State() {
-      button_state = digitalRead(BUTTON_PIN);
-      ir_sensor_state1 = digitalRead(IR_SENSOR_PIN1);
-      ir_sensor_state2 = digitalRead(IR_SENSOR_PIN2);
-    }
+public:
 
-    bool beam_broken() {
-      return ir_sensor_state1 == LOW || ir_sensor_state2 == LOW;
-    }
+  State() {
+    button_state = digitalRead(BUTTON_PIN);
+    ir_sensor_state1 = digitalRead(IR_SENSOR_PIN1);
+    ir_sensor_state2 = digitalRead(IR_SENSOR_PIN2);
+  }
 
-    bool button_pressed(State prev) {
-      return button_state == HIGH && prev.button_state == LOW;
-    }
+  bool beam_broken() {
+    return ir_sensor_state1 == LOW || ir_sensor_state2 == LOW;
+  }
+
+  bool button_pressed(State prev) {
+    return button_state == HIGH && prev.button_state == LOW;
+  }
 };
 
 void setup()  {
@@ -86,34 +88,33 @@ State previous_state;
 State current_state;
 Race race;
 
-void hotloop() {
+void loop() {
+  current_state = State();
+
   if (!race.in_progress() && current_state.button_pressed(previous_state)) {
     Log::info("Race started");
     race = Race();
     race.start();
-    return;
+    goto NEXT;
   }
 
   if (race.in_progress() && current_state.button_pressed(previous_state)) {
     Log::info("Race reset");
     race = Race();
-    return;
+    goto NEXT;
   }
 
   if (race.in_progress() && current_state.beam_broken()) {
     Log::info("Race ended");
     race.end();
-    return;
+    goto NEXT;
   }
 
   if (race.in_progress()) {
     write_display(race.elapsed_ms());
-    return;
+    goto NEXT;
   }
-}
 
-void loop() {
-  current_state = State();
-  hotloop();
+NEXT:
   previous_state = current_state;
 }
